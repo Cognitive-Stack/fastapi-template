@@ -1,0 +1,27 @@
+[tool.poetry]
+name = "fastapi-template"
+version = "0.1.0"
+description = ""
+authors = ["toreleon <levietthang0512@outlook.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+fastapi = "^0.115.6"
+uvicorn = "^0.34.0"
+python-jose = {extras = ["cryptography"], version = "^3.3.0"}
+passlib = "^1.7.4"
+pydantic = {extras = ["email"], version = "^2.10.4"}
+google-auth = "^2.37.0"
+google-auth-oauthlib = "^1.2.1"
+pydantic-settings = "^2.7.0"
+python-multipart = "^0.0.20"
+aiohttp = "^3.11.11"
+loguru = "^0.7.3"
+aio-pika = "^9.5.4"
+motor = "^3.7.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
