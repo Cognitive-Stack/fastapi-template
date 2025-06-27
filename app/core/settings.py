@@ -5,21 +5,13 @@ from urllib.parse import quote_plus
 
 
 class Settings(BaseSettings):
-    # Security Settings
-    SECRET_KEY: str
+    # Security Settings (JWT)
+    SECRET_KEY: str = "secret-key"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480
 
-    # Azure Settings
-    AZURE_ENDPOINT: str
-    AZURE_KEY: str
-    AZURE_OPENAI_ENDPOINT: str
-    AZURE_OPENAI_KEY: str
-    AZURE_OPENAI_VERSION: str
-
     # MongoDB Settings
-    MONGODB_URI: str = "mongodb://localhost:27017"
-    DATABASE_NAME: str = "database"
+    MONGO_DATABASE_NAME: str = "database"
     MONGO_USERNAME: str = "admin"
     MONGO_PASSWORD: str = ""
     MONGO_HOST: str = "localhost"
@@ -27,10 +19,6 @@ class Settings(BaseSettings):
 
     # Redis Settings
     REDIS_URL: str = "redis://localhost:6379/0"
-
-    # Google OAuth Settings
-    GOOGLE_CLIENT_ID: str
-    GOOGLE_CLIENT_SECRET: str
 
     # RabbitMQ Settings
     RABBITMQ_HOST: str = "localhost"
@@ -46,7 +34,7 @@ class Settings(BaseSettings):
         return f"amqp://{self.RABBITMQ_USERNAME}:{self.RABBITMQ_PASSWORD}@{self.RABBITMQ_HOST}:{self.RABBITMQ_PORT}/{self.RABBITMQ_VHOST}"
 
     @property
-    def MONGODB_URL(self) -> str:
+    def MONGODB_URI(self) -> str:
         if not self.MONGO_PASSWORD:
             return f"mongodb://{self.MONGO_HOST}:{self.MONGO_PORT}"
 

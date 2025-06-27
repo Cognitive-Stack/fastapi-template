@@ -20,7 +20,7 @@ async def lifespan(app: FastAPI):
 
         # Initialize MongoDB client
         app.mongodb_client = get_mongodb_client()
-        app.db = app.mongodb_client[settings.DATABASE_NAME]
+        app.db = app.mongodb_client[settings.MONGO_DATABASE_NAME]
 
         # Initialize RabbitMQ connection
         app.rabbitmq_connection = await get_rabbitmq_connection()

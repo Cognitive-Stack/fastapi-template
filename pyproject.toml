@@ -9,8 +9,6 @@ readme = "README.md"
 python = "^3.12"
 fastapi = "^0.115.6"
 uvicorn = "^0.34.0"
-bson = "^0.5.10"
-motor = "^3.6.0"
 python-jose = {extras = ["cryptography"], version = "^3.3.0"}
 passlib = "^1.7.4"
 pydantic = {extras = ["email"], version = "^2.10.4"}
@@ -21,6 +19,7 @@ python-multipart = "^0.0.20"
 aiohttp = "^3.11.11"
 loguru = "^0.7.3"
 aio-pika = "^9.5.4"
+motor = "^3.7.1"
 
 
 [build-system]
