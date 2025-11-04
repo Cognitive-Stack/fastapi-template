@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FastAPI Chat</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 800px;
+            height: 90vh;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Login Screen */
+        .login-screen {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            padding: 40px;
+        }
+
+        .login-screen h1 {
+            color: #667eea;
+            margin-bottom: 30px;
+        }
+
+        .login-form {
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .error-message {
+            color: #e74c3c;
+            margin-top: 10px;
+            font-size: 14px;
+            text-align: center;
+        }
+
+        /* Chat Interface */
+        .chat-interface {
+            display: none;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        .chat-interface.active {
+            display: flex;
+        }
+
+        .chat-header {
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .chat-header h2 {
+            font-size: 20px;
+        }
+
+        .user-info {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .logout-btn {
+            padding: 8px 16px;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+
+        .logout-btn:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .messages-container {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: #f8f9fa;
+        }
+
+        .message {
+            margin-bottom: 16px;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.system {
+            text-align: center;
+            color: #6c757d;
+            font-size: 14px;
+            font-style: italic;
+        }
+
+        .message.user {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+        }
+
+        .message.other {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .message-content {
+            max-width: 70%;
+            padding: 12px 16px;
+            border-radius: 16px;
+            word-wrap: break-word;
+        }
+
+        .message.user .message-content {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message.other .message-content {
+            background: white;
+            color: #333;
+            border-bottom-left-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .message-header {
+            font-size: 12px;
+            margin-bottom: 4px;
+            opacity: 0.7;
+        }
+
+        .message.user .message-header {
+            color: #667eea;
+        }
+
+        .message.other .message-header {
+            color: #6c757d;
+        }
+
+        .message-time {
+            font-size: 11px;
+            margin-top: 4px;
+            opacity: 0.6;
+        }
+
+        .input-container {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            gap: 12px;
+        }
+
+        .message-input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 24px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .message-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .send-btn {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 24px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: transform 0.2s;
+        }
+
+        .send-btn:hover {
+            transform: scale(1.05);
+        }
+
+        .send-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .connection-status {
+            padding: 8px 16px;
+            text-align: center;
+            font-size: 12px;
+            background: #ffc107;
+            color: #333;
+        }
+
+        .connection-status.connected {
+            background: #28a745;
+            color: white;
+        }
+
+        .connection-status.disconnected {
+            background: #dc3545;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Login Screen -->
+        <div class="login-screen" id="loginScreen">
+            <h1>🚀 FastAPI Chat</h1>
+            <form class="login-form" id="loginForm">
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" placeholder="Enter your username" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" placeholder="Enter your password" required>
+                </div>
+                <button type="submit" class="btn">Login</button>
+                <div class="error-message" id="loginError"></div>
+            </form>
+        </div>
+
+        <!-- Chat Interface -->
+        <div class="chat-interface" id="chatInterface">
+            <div class="chat-header">
+                <div>
+                    <h2>💬 General Chat</h2>
+                    <div class="user-info" id="userInfo"></div>
+                </div>
+                <button class="logout-btn" id="logoutBtn">Logout</button>
+            </div>
+            <div class="connection-status" id="connectionStatus">Connecting...</div>
+            <div class="messages-container" id="messagesContainer"></div>
+            <div class="input-container">
+                <input type="text" class="message-input" id="messageInput" placeholder="Type a message..." disabled>
+                <button class="send-btn" id="sendBtn" disabled>Send</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+        const WS_URL = 'ws://localhost:8000';
+        let ws = null;
+        let currentUser = null;
+        let accessToken = null;
+
+        // DOM Elements
+        const loginScreen = document.getElementById('loginScreen');
+        const chatInterface = document.getElementById('chatInterface');
+        const loginForm = document.getElementById('loginForm');
+        const loginError = document.getElementById('loginError');
+        const userInfo = document.getElementById('userInfo');
+        const messagesContainer = document.getElementById('messagesContainer');
+        const messageInput = document.getElementById('messageInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const connectionStatus = document.getElementById('connectionStatus');
+
+        // Login
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const formData = new URLSearchParams();
+                formData.append('username', username);
+                formData.append('password', password);
+
+                const response = await fetch(`${API_URL}/auths/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error('Login failed');
+                }
+
+                const data = await response.json();
+                accessToken = data.access_token;
+
+                // Get user info
+                const userResponse = await fetch(`${API_URL}/users/me`, {
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`
+                    }
+                });
+
+                if (!userResponse.ok) {
+                    throw new Error('Failed to get user info');
+                }
+
+                currentUser = await userResponse.json();
+                loginScreen.style.display = 'none';
+                chatInterface.classList.add('active');
+                userInfo.textContent = `Logged in as ${currentUser.username}`;
+
+                // Load message history
+                await loadMessages();
+
+                // Connect to WebSocket
+                connectWebSocket();
+
+            } catch (error) {
+                loginError.textContent = 'Login failed. Please check your credentials.';
+            }
+        });
+
+        // Load message history
+        async function loadMessages() {
+            try {
+                const response = await fetch(`${API_URL}/chat/messages/general?limit=50`, {
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`
+                    }
+                });
+
+                if (response.ok) {
+                    const messages = await response.json();
+                    messages.forEach(msg => {
+                        addMessage(msg, false);
+                    });
+                    scrollToBottom();
+                }
+            } catch (error) {
+                console.error('Failed to load messages:', error);
+            }
+        }
+
+        // WebSocket connection
+        function connectWebSocket() {
+            ws = new WebSocket(`${WS_URL}/chat/ws/general?token=${accessToken}`);
+
+            ws.onopen = () => {
+                console.log('WebSocket connected');
+                connectionStatus.textContent = 'Connected';
+                connectionStatus.className = 'connection-status connected';
+                messageInput.disabled = false;
+                sendBtn.disabled = false;
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.type === 'message') {
+                    addMessage(data, true);
+                } else if (data.type === 'system') {
+                    addSystemMessage(data.content);
+                }
+            };
+
+            ws.onclose = () => {
+                console.log('WebSocket disconnected');
+                connectionStatus.textContent = 'Disconnected';
+                connectionStatus.className = 'connection-status disconnected';
+                messageInput.disabled = true;
+                sendBtn.disabled = true;
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                connectionStatus.textContent = 'Connection error';
+                connectionStatus.className = 'connection-status disconnected';
+            };
+        }
+
+        // Add message to UI
+        function addMessage(data, animate) {
+            const messageDiv = document.createElement('div');
+            const isCurrentUser = data.user_id === currentUser._id;
+            messageDiv.className = `message ${isCurrentUser ? 'user' : 'other'}`;
+
+            const time = new Date(data.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            messageDiv.innerHTML = `
+                <div class="message-header">${isCurrentUser ? 'You' : data.username}</div>
+                <div class="message-content">${escapeHtml(data.content)}</div>
+                <div class="message-time">${time}</div>
+            `;
+
+            messagesContainer.appendChild(messageDiv);
+            if (animate) {
+                scrollToBottom();
+            }
+        }
+
+        // Add system message
+        function addSystemMessage(content) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message system';
+            messageDiv.textContent = content;
+            messagesContainer.appendChild(messageDiv);
+            scrollToBottom();
+        }
+
+        // Send message
+        function sendMessage() {
+            const content = messageInput.value.trim();
+            if (content && ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ content }));
+                messageInput.value = '';
+            }
+        }
+
+        sendBtn.addEventListener('click', sendMessage);
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        // Logout
+        logoutBtn.addEventListener('click', () => {
+            if (ws) {
+                ws.close();
+            }
+            currentUser = null;
+            accessToken = null;
+            chatInterface.classList.remove('active');
+            loginScreen.style.display = 'flex';
+            messagesContainer.innerHTML = '';
+            messageInput.value = '';
+            document.getElementById('username').value = '';
+            document.getElementById('password').value = '';
+            loginError.textContent = '';
+        });
+
+        // Utility functions
+        function scrollToBottom() {
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>

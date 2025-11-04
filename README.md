@@ -6,9 +6,11 @@ API for FastAPI Template - A platform for managing your projects with AI.
 
 *   **Authentication:** Secure user authentication using JWT.
 *   **User Management:** Create, read, update, and delete users.
+*   **Chat Sessions:** Real-time chat with session management.
+*   **Code Context:** Upload code repositories or zip files as context for AI chats.
 *   **Asynchronous:** Built with FastAPI for high performance.
 *   **MongoDB:** Uses MongoDB as the database.
-*   **RabbitMQ:** Uses RabbitMQ for message queuing.
+*   **WebSocket Support:** Real-time communication capabilities.
 
 ## Getting Started
 
@@ -17,7 +19,7 @@ These instructions will get you a copy of the project up and running on your loc
 ### Prerequisites
 
 *   Python 3.12+
-*   Poetry
+*   uv
 *   Docker
 
 ### Installation
@@ -33,8 +35,8 @@ These instructions will get you a copy of the project up and running on your loc
 
     The `install.sh` script will:
     *   Install `poppler-utils`.
-    *   Install Python and Poetry if they are not already installed.
-    *   Install project dependencies using Poetry.
+    *   Install Python and uv if they are not already installed.
+    *   Install project dependencies using uv.
     *   Install Docker if it is not already installed.
     *   Pull and run MongoDB, Redis, and RabbitMQ Docker containers.
 
@@ -52,35 +54,77 @@ make run
 
 The application will be available at `http://127.0.0.1:8000`.
 
+### Quick Links
+
+- **Chat UI:** `http://127.0.0.1:8000/static/chat_sessions.html`
+- **API Docs:** `http://127.0.0.1:8000/docs`
+- **ReDoc:** `http://127.0.0.1:8000/redoc`
+
+## 📚 Documentation
+
+Comprehensive documentation is available in the `docs/` folder:
+
+- **[Code Context Feature](docs/FEATURE_README.md)** - Complete guide to the code context feature
+- **[Quick Start Guide](docs/QUICK_START_GUIDE.md)** - Step-by-step user guide
+- **[Technical Documentation](docs/CODE_CONTEXT_FEATURE.md)** - API reference and implementation details
+- **[All Documentation](docs/README.md)** - Full documentation index
+
+## 🧪 Testing
+
+Test files are organized in the `tests/` folder:
+
+- **[Test Documentation](tests/README.md)** - Testing guide and instructions
+- **Code Context Tests:** `python3 tests/test_context_feature.py`
+- **WebSocket Tests:** `python3 tests/test_websocket.py`
+- **Session Tests:** `bash tests/test_sessions.sh`
+
 ## Project Structure
 
 ```
-app/
-├── __init__.py
-├── main.py
-├── controllers/
-│   └── users.py
-├── core/
-│   └── settings.py
-├── dependencies/
-│   └── auth.py
-├── middlewares/
-│   └── cors_middleware.py
-├── models/
-│   ├── base.py
-│   └── users.py
-├── routers/
-│   ├── auths.py
-│   └── users.py
-├── schemas/
-│   ├── auths.py
-│   └── users.py
-├── utils/
-│   ├── mongodb.py
-│   ├── rabbitmq.py
-│   └── superuser.py
-└── workers/
-    └── consumer.py
+fastapi-template/
+├── app/
+│   ├── __init__.py
+│   ├── main.py
+│   ├── controllers/
+│   │   └── users.py
+│   ├── core/
+│   │   └── settings.py
+│   ├── dependencies/
+│   │   └── auth.py
+│   ├── middlewares/
+│   │   └── cors_middleware.py
+│   ├── models/
+│   │   ├── base.py
+│   │   ├── users.py
+│   │   ├── chat_sessions.py
+│   │   └── messages.py
+│   ├── routers/
+│   │   ├── auths.py
+│   │   ├── users.py
+│   │   ├── chat.py
+│   │   └── chat_sessions.py
+│   ├── schemas/
+│   │   ├── auths.py
+│   │   ├── users.py
+│   │   ├── chat_sessions.py
+│   │   └── messages.py
+│   ├── static/
+│   │   ├── chat.html
+│   │   └── chat_sessions.html
+│   └── utils/
+│       ├── mongodb.py
+│       └── superuser.py
+├── docs/
+│   ├── README.md
+│   ├── FEATURE_README.md
+│   ├── QUICK_START_GUIDE.md
+│   └── CODE_CONTEXT_FEATURE.md
+├── tests/
+│   ├── README.md
+│   ├── test_context_feature.py
+│   └── test_websocket.py
+├── docker-compose.yml
+└── README.md
 ```
 
 ## Dependencies

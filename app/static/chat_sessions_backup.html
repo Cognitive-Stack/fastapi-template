@@ -1,0 +1,1163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Sessions - FastAPI</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .container {
+            width: 95%;
+            max-width: 1200px;
+            height: 90vh;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* Login Screen */
+        .login-screen {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            padding: 40px;
+        }
+
+        .login-screen h1 {
+            color: #667eea;
+            margin-bottom: 30px;
+        }
+
+        .login-form {
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .error-message {
+            color: #e74c3c;
+            margin-top: 10px;
+            font-size: 14px;
+            text-align: center;
+        }
+
+        /* Chat Interface */
+        .chat-interface {
+            display: none;
+            width: 100%;
+            height: 100%;
+        }
+
+        .chat-interface.active {
+            display: flex;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 300px;
+            background: #f8f9fa;
+            border-right: 1px solid #e0e0e0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .sidebar-header h2 {
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+
+        .user-info {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .logout-btn {
+            margin-top: 10px;
+            padding: 8px 16px;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .new-session-btn {
+            margin: 20px;
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .sessions-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0 10px;
+        }
+
+        .session-item {
+            padding: 15px;
+            margin-bottom: 10px;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: 2px solid transparent;
+        }
+
+        .session-item:hover {
+            background: #f0f0f0;
+        }
+
+        .session-item.active {
+            border-color: #667eea;
+            background: #f0f0ff;
+        }
+
+        .session-title {
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #333;
+        }
+
+        .session-info {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .session-actions {
+            margin-top: 8px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .session-action-btn {
+            padding: 4px 8px;
+            font-size: 12px;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .session-action-btn:hover {
+            background: #f0f0f0;
+        }
+
+        .session-action-btn.delete {
+            color: #e74c3c;
+            border-color: #e74c3c;
+        }
+
+        /* Main Chat Area */
+        .chat-main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-header {
+            padding: 20px;
+            background: white;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .chat-header h2 {
+            font-size: 20px;
+            color: #333;
+        }
+
+        .messages-container {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: #f8f9fa;
+        }
+
+        .message {
+            margin-bottom: 16px;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message-content {
+            padding: 12px 16px;
+            border-radius: 16px;
+            word-wrap: break-word;
+            max-width: 80%;
+        }
+
+        .message.user {
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .message.user .message-content {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message.assistant {
+            display: flex;
+            justify-content: flex-start;
+        }
+
+        .message.assistant .message-content {
+            background: white;
+            color: #333;
+            border-bottom-left-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .message-time {
+            font-size: 11px;
+            margin-top: 4px;
+            opacity: 0.6;
+            text-align: right;
+        }
+
+        .input-container {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            gap: 12px;
+        }
+
+        .message-input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 24px;
+            font-size: 14px;
+            resize: none;
+            max-height: 120px;
+        }
+
+        .message-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .send-btn {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 24px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .send-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            color: #999;
+        }
+
+        .empty-state h3 {
+            margin-bottom: 10px;
+        }
+
+        /* Context Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-header h3 {
+            margin: 0;
+            color: #333;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #999;
+        }
+
+        .close-btn:hover {
+            color: #333;
+        }
+
+        .context-option {
+            padding: 20px;
+            margin-bottom: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .context-option:hover {
+            border-color: #667eea;
+            background: #f0f0ff;
+        }
+
+        .context-option h4 {
+            margin: 0 0 8px 0;
+            color: #333;
+        }
+
+        .context-option p {
+            margin: 0;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .context-form {
+            display: none;
+            margin-top: 20px;
+        }
+
+        .context-form.active {
+            display: block;
+        }
+
+        .context-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            background: #28a745;
+            color: white;
+            border-radius: 12px;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+
+        .add-context-btn {
+            padding: 8px 16px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-left: 10px;
+        }
+
+        .add-context-btn:hover {
+            background: #218838;
+        }
+
+        .context-info {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f0f0f0;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .context-info strong {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .remove-context-btn {
+            padding: 6px 12px;
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-top: 8px;
+        }
+
+        .remove-context-btn:hover {
+            background: #c82333;
+        }
+
+        .file-input-label {
+            display: inline-block;
+            padding: 12px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 8px;
+            cursor: pointer;
+            text-align: center;
+        }
+
+        .file-input-label:hover {
+            transform: translateY(-2px);
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .selected-file {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f0f0f0;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .upload-progress {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Login Screen -->
+        <div class="login-screen" id="loginScreen">
+            <h1>💬 Chat Sessions</h1>
+            <form class="login-form" id="loginForm">
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" placeholder="Enter your username" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" placeholder="Enter your password" required>
+                </div>
+                <button type="submit" class="btn">Login</button>
+                <div class="error-message" id="loginError"></div>
+            </form>
+        </div>
+
+        <!-- Chat Interface -->
+        <div class="chat-interface" id="chatInterface">
+            <!-- Sidebar -->
+            <div class="sidebar">
+                <div class="sidebar-header">
+                    <h2>My Chats</h2>
+                    <div class="user-info" id="userInfo"></div>
+                    <button class="logout-btn" id="logoutBtn">Logout</button>
+                </div>
+                <button class="new-session-btn" id="newSessionBtn">+ New Chat</button>
+                <div class="sessions-list" id="sessionsList"></div>
+            </div>
+
+            <!-- Main Chat Area -->
+            <div class="chat-main">
+                <div class="chat-header">
+                    <h2 id="chatTitle">Select or create a chat session</h2>
+                    <button class="add-context-btn" id="addContextBtn" style="display: none;">+ Add Code Context</button>
+                </div>
+                <div class="messages-container" id="messagesContainer">
+                    <div class="empty-state">
+                        <h3>No chat selected</h3>
+                        <p>Create a new chat or select an existing one</p>
+                    </div>
+                </div>
+                <div class="input-container">
+                    <textarea class="message-input" id="messageInput" placeholder="Type a message..." disabled rows="1"></textarea>
+                    <button class="send-btn" id="sendBtn" disabled>Send</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Context Modal -->
+    <div class="modal" id="contextModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add Code Context</h3>
+                <button class="close-btn" id="closeModalBtn">&times;</button>
+            </div>
+
+            <div id="contextOptions">
+                <div class="context-option" data-type="repository">
+                    <h4>Repository URL</h4>
+                    <p>Add a code repository by URL (GitHub, GitLab, etc.)</p>
+                </div>
+
+                <div class="context-option" data-type="zip">
+                    <h4>Upload Zip File</h4>
+                    <p>Upload a zip file containing your code</p>
+                </div>
+            </div>
+
+            <!-- Repository Form -->
+            <div class="context-form" id="repositoryForm">
+                <div class="form-group">
+                    <label for="repositoryUrl">Repository URL</label>
+                    <input type="url" id="repositoryUrl" placeholder="https://github.com/username/repo" required>
+                </div>
+                <button class="btn" id="submitRepoBtn">Add Repository</button>
+            </div>
+
+            <!-- Zip Upload Form -->
+            <div class="context-form" id="zipForm">
+                <div class="form-group">
+                    <label for="zipFile">Select Zip File</label>
+                    <label for="zipFile" class="file-input-label">Choose File</label>
+                    <input type="file" id="zipFile" accept=".zip" required>
+                    <div class="selected-file" id="selectedFile" style="display: none;"></div>
+                </div>
+                <button class="btn" id="submitZipBtn">Upload Zip</button>
+                <div class="upload-progress" id="uploadProgress" style="display: none;"></div>
+            </div>
+
+            <!-- Current Context Display -->
+            <div class="context-info" id="currentContext" style="display: none;">
+                <strong>Current Context:</strong>
+                <div id="contextDetails"></div>
+                <button class="remove-context-btn" id="removeContextBtn">Remove Context</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+        let currentUser = null;
+        let accessToken = null;
+        let currentSessionId = null;
+        let sessions = [];
+
+        // DOM Elements
+        const loginScreen = document.getElementById('loginScreen');
+        const chatInterface = document.getElementById('chatInterface');
+        const loginForm = document.getElementById('loginForm');
+        const loginError = document.getElementById('loginError');
+        const userInfo = document.getElementById('userInfo');
+        const sessionsList = document.getElementById('sessionsList');
+        const messagesContainer = document.getElementById('messagesContainer');
+        const messageInput = document.getElementById('messageInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const newSessionBtn = document.getElementById('newSessionBtn');
+        const chatTitle = document.getElementById('chatTitle');
+
+        // Login
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const formData = new URLSearchParams();
+                formData.append('username', username);
+                formData.append('password', password);
+
+                const response = await fetch(`${API_URL}/auths/login`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: formData
+                });
+
+                if (!response.ok) throw new Error('Login failed');
+
+                const data = await response.json();
+                accessToken = data.access_token;
+
+                const userResponse = await fetch(`${API_URL}/users/me`, {
+                    headers: {'Authorization': `Bearer ${accessToken}`}
+                });
+
+                if (!userResponse.ok) throw new Error('Failed to get user info');
+
+                currentUser = await userResponse.json();
+                loginScreen.style.display = 'none';
+                chatInterface.classList.add('active');
+                userInfo.textContent = `${currentUser.username}`;
+
+                await loadSessions();
+
+            } catch (error) {
+                loginError.textContent = 'Login failed. Please check your credentials.';
+            }
+        });
+
+        // Load sessions
+        async function loadSessions() {
+            try {
+                const response = await fetch(`${API_URL}/chat/sessions`, {
+                    headers: {'Authorization': `Bearer ${accessToken}`}
+                });
+
+                if (response.ok) {
+                    sessions = await response.json();
+                    renderSessions();
+                }
+            } catch (error) {
+                console.error('Failed to load sessions:', error);
+            }
+        }
+
+        // Render sessions
+        function renderSessions() {
+            sessionsList.innerHTML = '';
+            sessions.forEach(session => {
+                const div = document.createElement('div');
+                div.className = `session-item ${currentSessionId === session._id ? 'active' : ''}`;
+                div.innerHTML = `
+                    <div class="session-title">${escapeHtml(session.title)}</div>
+                    <div class="session-info">${session.message_count} messages</div>
+                    <div class="session-actions">
+                        <button class="session-action-btn rename-btn" data-id="${session._id}">Rename</button>
+                        <button class="session-action-btn delete" data-id="${session._id}">Delete</button>
+                    </div>
+                `;
+
+                div.addEventListener('click', (e) => {
+                    if (!e.target.classList.contains('session-action-btn')) {
+                        selectSession(session._id);
+                    }
+                });
+
+                div.querySelector('.rename-btn').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    renameSession(session._id);
+                });
+
+                div.querySelector('.delete').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    deleteSession(session._id);
+                });
+
+                sessionsList.appendChild(div);
+            });
+        }
+
+        // Select session
+        async function selectSession(sessionId) {
+            currentSessionId = sessionId;
+            const session = sessions.find(s => s._id === sessionId);
+            chatTitle.textContent = session.title;
+            messageInput.disabled = false;
+            sendBtn.disabled = false;
+            await loadMessages();
+            renderSessions();
+        }
+
+        // Load messages
+        async function loadMessages() {
+            try {
+                const response = await fetch(`${API_URL}/chat/sessions/${currentSessionId}/messages`, {
+                    headers: {'Authorization': `Bearer ${accessToken}`}
+                });
+
+                if (response.ok) {
+                    const messages = await response.json();
+                    messagesContainer.innerHTML = '';
+                    messages.forEach(msg => addMessage(msg));
+                    scrollToBottom();
+                }
+            } catch (error) {
+                console.error('Failed to load messages:', error);
+            }
+        }
+
+        // Add message to UI
+        function addMessage(data) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${data.role}`;
+
+            const time = new Date(data.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            messageDiv.innerHTML = `
+                <div class="message-content">
+                    ${escapeHtml(data.content)}
+                    <div class="message-time">${time}</div>
+                </div>
+            `;
+
+            messagesContainer.appendChild(messageDiv);
+            scrollToBottom();
+        }
+
+        // Send message
+        async function sendMessage() {
+            const content = messageInput.value.trim();
+            if (!content || !currentSessionId) return;
+
+            try {
+                const response = await fetch(`${API_URL}/chat/sessions/${currentSessionId}/messages`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ content })
+                });
+
+                if (response.ok) {
+                    const message = await response.json();
+                    addMessage(message);
+                    messageInput.value = '';
+                    await loadSessions(); // Update session list
+                }
+            } catch (error) {
+                console.error('Failed to send message:', error);
+            }
+        }
+
+        sendBtn.addEventListener('click', sendMessage);
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        // New session
+        newSessionBtn.addEventListener('click', async () => {
+            const title = prompt('Enter chat title:', 'New Chat');
+            if (!title) return;
+
+            try {
+                const response = await fetch(`${API_URL}/chat/sessions`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ title })
+                });
+
+                if (response.ok) {
+                    await loadSessions();
+                    const newSession = await response.json();
+                    selectSession(newSession._id);
+                }
+            } catch (error) {
+                console.error('Failed to create session:', error);
+            }
+        });
+
+        // Rename session
+        async function renameSession(sessionId) {
+            const session = sessions.find(s => s._id === sessionId);
+            const newTitle = prompt('Enter new title:', session.title);
+            if (!newTitle || newTitle === session.title) return;
+
+            try {
+                const response = await fetch(`${API_URL}/chat/sessions/${sessionId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ title: newTitle })
+                });
+
+                if (response.ok) {
+                    await loadSessions();
+                    if (currentSessionId === sessionId) {
+                        chatTitle.textContent = newTitle;
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to rename session:', error);
+            }
+        }
+
+        // Delete session
+        async function deleteSession(sessionId) {
+            if (!confirm('Are you sure you want to delete this chat?')) return;
+
+            try {
+                const response = await fetch(`${API_URL}/chat/sessions/${sessionId}`, {
+                    method: 'DELETE',
+                    headers: {'Authorization': `Bearer ${accessToken}`}
+                });
+
+                if (response.ok) {
+                    if (currentSessionId === sessionId) {
+                        currentSessionId = null;
+                        messagesContainer.innerHTML = '<div class="empty-state"><h3>No chat selected</h3><p>Create a new chat or select an existing one</p></div>';
+                        chatTitle.textContent = 'Select or create a chat session';
+                        messageInput.disabled = true;
+                        sendBtn.disabled = true;
+                    }
+                    await loadSessions();
+                }
+            } catch (error) {
+                console.error('Failed to delete session:', error);
+            }
+        }
+
+        // Logout
+        logoutBtn.addEventListener('click', () => {
+            currentUser = null;
+            accessToken = null;
+            currentSessionId = null;
+            sessions = [];
+            chatInterface.classList.remove('active');
+            loginScreen.style.display = 'flex';
+            messagesContainer.innerHTML = '';
+            sessionsList.innerHTML = '';
+            messageInput.value = '';
+            document.getElementById('username').value = '';
+            document.getElementById('password').value = '';
+            loginError.textContent = '';
+        });
+
+        // Utility functions
+        function scrollToBottom() {
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Auto-resize textarea
+        messageInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+        });
+
+        // Context Management
+        const contextModal = document.getElementById('contextModal');
+        const addContextBtn = document.getElementById('addContextBtn');
+        const closeModalBtn = document.getElementById('closeModalBtn');
+        const contextOptions = document.querySelectorAll('.context-option');
+        const repositoryForm = document.getElementById('repositoryForm');
+        const zipForm = document.getElementById('zipForm');
+        const submitRepoBtn = document.getElementById('submitRepoBtn');
+        const submitZipBtn = document.getElementById('submitZipBtn');
+        const repositoryUrl = document.getElementById('repositoryUrl');
+        const zipFile = document.getElementById('zipFile');
+        const selectedFile = document.getElementById('selectedFile');
+        const uploadProgress = document.getElementById('uploadProgress');
+        const currentContext = document.getElementById('currentContext');
+        const contextDetails = document.getElementById('contextDetails');
+        const removeContextBtn = document.getElementById('removeContextBtn');
+
+        // Open modal
+        addContextBtn.addEventListener('click', () => {
+            contextModal.classList.add('active');
+            resetContextModal();
+            updateContextDisplay();
+        });
+
+        // Close modal
+        closeModalBtn.addEventListener('click', () => {
+            contextModal.classList.remove('active');
+        });
+
+        // Click outside to close
+        contextModal.addEventListener('click', (e) => {
+            if (e.target === contextModal) {
+                contextModal.classList.remove('active');
+            }
+        });
+
+        // Reset modal to initial state
+        function resetContextModal() {
+            repositoryForm.classList.remove('active');
+            zipForm.classList.remove('active');
+            document.getElementById('contextOptions').style.display = 'block';
+            repositoryUrl.value = '';
+            zipFile.value = '';
+            selectedFile.style.display = 'none';
+            uploadProgress.style.display = 'none';
+        }
+
+        // Show form based on selection
+        contextOptions.forEach(option => {
+            option.addEventListener('click', () => {
+                document.getElementById('contextOptions').style.display = 'none';
+                const type = option.dataset.type;
+
+                if (type === 'repository') {
+                    repositoryForm.classList.add('active');
+                } else if (type === 'zip') {
+                    zipForm.classList.add('active');
+                }
+            });
+        });
+
+        // File selection
+        zipFile.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                const file = e.target.files[0];
+                selectedFile.textContent = `Selected: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`;
+                selectedFile.style.display = 'block';
+            }
+        });
+
+        // Submit repository URL
+        submitRepoBtn.addEventListener('click', async () => {
+            const url = repositoryUrl.value.trim();
+            if (!url) {
+                alert('Please enter a repository URL');
+                return;
+            }
+
+            try {
+                submitRepoBtn.disabled = true;
+                submitRepoBtn.textContent = 'Adding...';
+
+                const response = await fetch(`${API_URL}/chat/sessions/${currentSessionId}/context/repository`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ repository_url: url })
+                });
+
+                if (response.ok) {
+                    const session = await response.json();
+                    updateSessionContext(session);
+                    contextModal.classList.remove('active');
+                    alert('Repository added successfully!');
+                } else {
+                    const error = await response.json();
+                    alert(`Failed to add repository: ${error.detail}`);
+                }
+            } catch (error) {
+                console.error('Failed to add repository:', error);
+                alert('Failed to add repository');
+            } finally {
+                submitRepoBtn.disabled = false;
+                submitRepoBtn.textContent = 'Add Repository';
+            }
+        });
+
+        // Submit zip file
+        submitZipBtn.addEventListener('click', async () => {
+            if (!zipFile.files.length) {
+                alert('Please select a zip file');
+                return;
+            }
+
+            const file = zipFile.files[0];
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                submitZipBtn.disabled = true;
+                submitZipBtn.textContent = 'Uploading...';
+                uploadProgress.style.display = 'block';
+                uploadProgress.textContent = 'Uploading and processing...';
+
+                const response = await fetch(`${API_URL}/chat/sessions/${currentSessionId}/context/upload`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`
+                    },
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const session = await response.json();
+                    updateSessionContext(session);
+                    contextModal.classList.remove('active');
+                    alert('Zip file uploaded successfully!');
+                } else {
+                    const error = await response.json();
+                    alert(`Failed to upload zip: ${error.detail}`);
+                }
+            } catch (error) {
+                console.error('Failed to upload zip:', error);
+                alert('Failed to upload zip file');
+            } finally {
+                submitZipBtn.disabled = false;
+                submitZipBtn.textContent = 'Upload Zip';
+                uploadProgress.style.display = 'none';
+            }
+        });
+
+        // Remove context
+        removeContextBtn.addEventListener('click', async () => {
+            if (!confirm('Are you sure you want to remove the code context?')) return;
+
+            try {
+                const response = await fetch(`${API_URL}/chat/sessions/${currentSessionId}/context`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`
+                    }
+                });
+
+                if (response.ok) {
+                    updateSessionContext(null);
+                    contextModal.classList.remove('active');
+                    alert('Context removed successfully');
+                } else {
+                    alert('Failed to remove context');
+                }
+            } catch (error) {
+                console.error('Failed to remove context:', error);
+                alert('Failed to remove context');
+            }
+        });
+
+        // Update session context display
+        function updateSessionContext(session) {
+            const currentSession = sessions.find(s => s._id === currentSessionId);
+            if (currentSession && session) {
+                currentSession.context = session.context;
+            } else if (currentSession) {
+                currentSession.context = null;
+            }
+            updateContextBadge();
+        }
+
+        // Update context badge in chat title
+        function updateContextBadge() {
+            const session = sessions.find(s => s._id === currentSessionId);
+            const existingBadge = document.querySelector('.context-badge');
+            if (existingBadge) existingBadge.remove();
+
+            if (session && session.context) {
+                const badge = document.createElement('span');
+                badge.className = 'context-badge';
+                badge.textContent = session.context.type === 'repository' ? 'Repository' : 'Zip';
+                chatTitle.appendChild(badge);
+            }
+        }
+
+        // Update context display in modal
+        function updateContextDisplay() {
+            const session = sessions.find(s => s._id === currentSessionId);
+
+            if (session && session.context) {
+                currentContext.style.display = 'block';
+                const ctx = session.context;
+                let details = `<strong>Type:</strong> ${ctx.type}<br>`;
+                if (ctx.source) {
+                    details += `<strong>Source:</strong> ${ctx.source}<br>`;
+                }
+                if (ctx.files && ctx.files.length > 0) {
+                    details += `<strong>Files:</strong> ${ctx.files.length} files`;
+                }
+                contextDetails.innerHTML = details;
+            } else {
+                currentContext.style.display = 'none';
+            }
+        }
+
+        // Update selectSession to show context button
+        const originalSelectSession = selectSession;
+        selectSession = async function(sessionId) {
+            await originalSelectSession(sessionId);
+            addContextBtn.style.display = 'inline-block';
+            updateContextBadge();
+        };
+    </script>
+</body>
+</html>

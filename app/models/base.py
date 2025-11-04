@@ -40,7 +40,7 @@ class PyObjectId(str):
 
 
 class BaseModel(BaseModel):
-    id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
+    id: Optional[PyObjectId] = Field(default=None, alias="_id")
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
     deleted: bool = False

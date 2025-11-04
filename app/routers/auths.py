@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, Request, Body
 from fastapi.security import OAuth2PasswordRequestForm
 from app.controllers.users import UserController
-from app.schemas.users import UserCreate, User, GoogleAuthRequest
+from app.schemas.users import UserCreate, User
 from app.schemas.auths import Token
 
 router = APIRouter()
@@ -57,12 +57,3 @@ async def verify_email(
     controller: UserController = Depends(get_user_controller),
 ):
     return await controller.verify_email(token)
-
-
-@router.post("/google/login", response_model=Token)
-async def google_login(
-    request: GoogleAuthRequest,
-    controller: UserController = Depends(get_user_controller),
-):
-    """Handle Google OAuth login/signup"""
-    return await controller.google_authenticate(request.token)

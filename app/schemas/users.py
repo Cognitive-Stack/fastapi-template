@@ -12,7 +12,6 @@ class UserRoles(str, Enum):
 
 class AuthProvider(str, Enum):
     LOCAL = "local"
-    GOOGLE = "google"
 
 
 class UserTier(str, Enum):
@@ -20,11 +19,8 @@ class UserTier(str, Enum):
     ENTERPRISE = "enterprise"
 
 
-class GoogleAuthRequest(BaseModel):
-    token: str
-
-
 class UserBase(BaseModel):
+    username: str
     email: EmailStr
     full_name: str
     birth_date: Optional[datetime] = None
@@ -36,16 +32,16 @@ class UserBase(BaseModel):
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
     auth_provider: AuthProvider = AuthProvider.LOCAL
-    google_id: Optional[str] = None
     completed_onboarding: bool = False
     tier: UserTier = UserTier.FREE
 
 
 class UserCreate(BaseModel):
+    username: str
     email: EmailStr
     full_name: str
-    birth_date: datetime
-    phone_number: str
+    birth_date: Optional[datetime] = None
+    phone_number: Optional[str] = None
     password: str
 
 

@@ -20,19 +20,6 @@ class Settings(BaseSettings):
     # Redis Settings
     REDIS_URL: str = "redis://localhost:6379/0"
 
-    # RabbitMQ Settings
-    RABBITMQ_HOST: str = "localhost"
-    RABBITMQ_PORT: int = 5672
-    RABBITMQ_USERNAME: str = "admin"
-    RABBITMQ_PASSWORD: str = ""
-    RABBITMQ_VHOST: str = "/"
-
-    @property
-    def RABBITMQ_URL(self) -> str:
-        if not self.RABBITMQ_PASSWORD:
-            return f"amqp://{self.RABBITMQ_HOST}:{self.RABBITMQ_PORT}/{self.RABBITMQ_VHOST}"
-        return f"amqp://{self.RABBITMQ_USERNAME}:{self.RABBITMQ_PASSWORD}@{self.RABBITMQ_HOST}:{self.RABBITMQ_PORT}/{self.RABBITMQ_VHOST}"
-
     @property
     def MONGODB_URI(self) -> str:
         if not self.MONGO_PASSWORD:

@@ -10,10 +10,7 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from app.models.users import UserModel
 from app.schemas.auths import Token, TokenData, TokenPayload
-from app.schemas.users import UserCreate, UserUpdate, UserRoles
-from google.oauth2 import id_token
-from google.auth.transport import requests
-from app.schemas.users import AuthProvider
+from app.schemas.users import UserCreate, UserUpdate, UserRoles, AuthProvider
 from app.core.settings import get_settings
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -173,8 +170,12 @@ class UserController:
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token"
             )
 
-    async def authenticate_user(self, email: str, password: str) -> Optional[UserModel]:
-        user = await self.get_user_by_email(email)
+    async def authenticate_user(self, username_or_email: str, password: str) -> Optional[UserModel]:
+        # Try to find user by email first, then by username
+        user = await self.get_user_by_email(username_or_email)
+        if not user:
+            user = await self.get_user_by_username(username_or_email)
+
         if user and verify_password(password, user.hashed_password):
             return user
         raise HTTPException(
@@ -186,6 +187,18 @@ class UserController:
     async def get_user_by_email(self, email: str) -> Optional[UserModel]:
         try:
             user = await self.collection.find_one({"email": email})
+            if user:
+                return UserModel(**user)
+            return None
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error retrieving user: {str(e)}",
+            )
+
+    async def get_user_by_username(self, username: str) -> Optional[UserModel]:
+        try:
+            user = await self.collection.find_one({"username": username})
             if user:
                 return UserModel(**user)
             return None
@@ -277,68 +290,6 @@ class UserController:
             )
 
         return {"message": "User has been deleted successfully"}
-
-    async def google_authenticate(self, token: str) -> Token:
-        try:
-            # Verify the Google token
-            idinfo = id_token.verify_oauth2_token(
-                token, requests.Request(), self.settings.GOOGLE_CLIENT_ID
-            )
-
-            email = idinfo["email"]
-            google_id = idinfo["sub"]
-
-            # Check if user exists
-            user = await self.get_user_by_email(email)
-            if not user:
-                # Create new user with Google data
-                user_data = {
-                    "email": email,
-                    "full_name": idinfo.get("name", ""),
-                    "email_verified": idinfo.get("email_verified", False),
-                    "profile_image": idinfo.get("picture"),
-                    "auth_provider": AuthProvider.GOOGLE,
-                    "google_id": google_id,
-                    "created_at": datetime.now().isoformat() + "Z",
-                    "updated_at": datetime.now().isoformat() + "Z",
-                    "role": UserRoles.USER,
-                    "disabled": False,
-                    "workspaces": [],
-                }
-                result = await self.collection.insert_one(user_data)
-                user = await self.get_user(result.inserted_id)
-            elif user.auth_provider != AuthProvider.GOOGLE:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Please use email/password to login",
-                )
-
-            # Create tokens
-            access_token = self.create_token(
-                user.email, "access", self.access_token_expires
-            )
-            refresh_token = self.create_token(
-                user.email, "refresh", self.refresh_token_expires
-            )
-            # Update last login
-            await self.collection.update_one(
-                {"email": user.email},
-                {"$set": {"last_login": datetime.now().isoformat() + "Z"}},
-            )
-
-            return Token(
-                **user.model_dump(),
-                access_token=access_token,
-                refresh_token=refresh_token,
-                expires_at=(datetime.now() + self.access_token_expires).isoformat()
-                + "Z",
-            )
-
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to authenticate with Google token: {str(e)}",
-            ) from e
 
     def create_token_for_interview(
         self, interview_id: str, expires_delta: Optional[timedelta] = None

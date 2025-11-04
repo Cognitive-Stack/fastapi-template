@@ -46,21 +46,18 @@ else
     echo "Python3 is already installed"
 fi
 
-# Check if Poetry is installed
-if ! command -v poetry &> /dev/null
+# Check if uv is installed
+if ! command -v uv &> /dev/null
 then
-    echo "Poetry not found, installing..."
-    curl -sSL https://install.python-poetry.org | python3 -
-    export PATH="$HOME/.local/bin:$PATH"
+    echo "uv not found, installing..."
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    export PATH="$HOME/.cargo/bin:$PATH"
 else
-    echo "Poetry is already installed"
+    echo "uv is already installed"
 fi
 
-# Add poetry-dotenv-plugin
-poetry self add poetry-dotenv-plugin
-
 # Install project dependencies
-poetry install
+uv sync
 
 # Check if Docker is installed
 if ! command -v docker &> /dev/null
