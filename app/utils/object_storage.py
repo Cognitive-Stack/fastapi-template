@@ -46,7 +46,11 @@ async def save_repository_files(artifact_id: str, files: List[Dict[str, Any]]) -
 
     Args:
         artifact_id: The artifact ID
-        files: List of file dictionaries with path, content, and size
+        files: List of file dictionaries with:
+          - path: relative path
+          - size: file size
+          - content: file content (if available)
+          - full_path: full path to source file (if available)
 
     Returns:
         Dictionary with storage statistics
@@ -69,16 +73,24 @@ async def save_repository_files(artifact_id: str, files: List[Dict[str, Any]]) -
 
         for file_info in files:
             file_path = file_info['path']
-            content = file_info['content']
             size = file_info['size']
 
             # Create full path
             full_path = repo_path / file_path
             full_path.parent.mkdir(parents=True, exist_ok=True)
 
-            # Write file content
-            with open(full_path, 'w', encoding='utf-8', errors='ignore') as f:
-                f.write(content)
+            # Write file content - either from content or copy from full_path
+            if 'content' in file_info:
+                # Legacy mode - content provided directly
+                with open(full_path, 'w', encoding='utf-8', errors='ignore') as f:
+                    f.write(file_info['content'])
+            elif 'full_path' in file_info:
+                # New streaming mode - copy from source
+                source_path = Path(file_info['full_path'])
+                shutil.copy2(source_path, full_path)
+            else:
+                logger.warning(f"Skipping file {file_path}: no content or full_path provided")
+                continue
 
             saved_files.append({
                 "path": file_path,

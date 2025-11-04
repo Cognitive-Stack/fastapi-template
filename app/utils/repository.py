@@ -31,27 +31,30 @@ IGNORE_DIRS = {
 MAX_FILE_SIZE = 5 * 1024 * 1024
 
 
-async def clone_and_extract_repository(repo_url: str, max_files: int = 500) -> Dict[str, Any]:
+async def clone_and_extract_repository(repo_url: str, max_files: int = 500, artifact_id: Optional[str] = None) -> Dict[str, Any]:
     """
     Clone a Git repository and extract code files.
 
     Args:
         repo_url: URL of the Git repository
         max_files: Maximum number of files to extract
+        artifact_id: If provided, files will be saved directly to object storage
 
     Returns:
         Dictionary containing:
-        - files: List of file dictionaries with path, content, and size
+        - files: List of file dictionaries with path and size (no content if artifact_id provided)
         - total_files: Total number of files extracted
         - repo_name: Name of the repository
         - error: Error message if any
+        - temp_dir: Temporary directory path (for later processing)
     """
     temp_dir = None
     result = {
         'files': [],
         'total_files': 0,
         'repo_name': '',
-        'error': None
+        'error': None,
+        'temp_dir': None
     }
 
     try:
@@ -112,27 +115,34 @@ async def clone_and_extract_repository(repo_url: str, max_files: int = 500) -> D
                 except OSError:
                     continue
 
-                # Read file content
+                # Calculate relative path for storage
                 try:
-                    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                        content = f.read()
-
-                    # Calculate relative path for storage
                     if rel_root == '.':
                         relative_path = filename
                     else:
                         relative_path = os.path.join(rel_root, filename)
 
-                    files.append({
-                        'path': relative_path,
-                        'content': content,
-                        'size': file_size
-                    })
+                    # Only read content if no artifact_id (legacy mode)
+                    if artifact_id is None:
+                        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                            content = f.read()
+                        files.append({
+                            'path': relative_path,
+                            'content': content,
+                            'size': file_size
+                        })
+                    else:
+                        # Just store metadata, files will be processed later
+                        files.append({
+                            'path': relative_path,
+                            'size': file_size,
+                            'full_path': file_path  # Keep track of file location for later
+                        })
 
                     file_count += 1
 
                 except Exception as e:
-                    logger.warning(f"Failed to read file {file_path}: {e}")
+                    logger.warning(f"Failed to process file {file_path}: {e}")
                     continue
 
             # Break outer loop if max files reached
@@ -141,21 +151,28 @@ async def clone_and_extract_repository(repo_url: str, max_files: int = 500) -> D
 
         result['files'] = files
         result['total_files'] = file_count
+        result['temp_dir'] = temp_dir  # Return temp_dir for later cleanup
 
         logger.info(f"Extracted {file_count} files from repository {repo_name}")
 
     except Exception as e:
         logger.error(f"Error processing repository: {e}")
         result['error'] = str(e)
-
-    finally:
-        # Cleanup temporary directory
+        # Cleanup on error
         if temp_dir and os.path.exists(temp_dir):
             try:
                 shutil.rmtree(temp_dir)
-                logger.debug(f"Cleaned up temporary directory: {temp_dir}")
-            except Exception as e:
-                logger.error(f"Failed to cleanup temp directory: {e}")
+            except Exception as cleanup_error:
+                logger.error(f"Failed to cleanup temp directory: {cleanup_error}")
+
+    # Note: If artifact_id is provided, don't cleanup temp_dir yet
+    # It will be cleaned up after files are saved to object storage
+    if artifact_id is None and temp_dir and os.path.exists(temp_dir):
+        try:
+            shutil.rmtree(temp_dir)
+            logger.debug(f"Cleaned up temporary directory: {temp_dir}")
+        except Exception as e:
+            logger.error(f"Failed to cleanup temp directory: {e}")
 
     return result
 

@@ -1,23 +1,25 @@
-from fastapi import APIRouter, Depends, Request, HTTPException, status, UploadFile, File, BackgroundTasks, Response
+from fastapi import APIRouter, Depends, Request, HTTPException, status, UploadFile, File, Response
 from typing import List
 from datetime import datetime
 from bson import ObjectId
-import zipfile
-import io
 from pathlib import Path
+
 from app.schemas.artifacts import ArtifactCreate, ArtifactUpdate, ArtifactResponse, ArtifactListResponse, RepositoryContextCreate
-from app.models.artifacts import ArtifactModel
 from app.dependencies.auth import get_current_active_user
 from app.schemas.users import User
-from app.utils.repository import clone_and_extract_repository, validate_repository_url, get_repository_info
 from app.utils.object_storage import (
     initialize_storage,
-    save_repository_files,
-    save_uploaded_file,
     get_repository_files,
     get_repository_file_content,
     get_uploaded_file,
     delete_artifact_files
+)
+from app.utils.artifact_helpers import (
+    handle_repository_upload,
+    handle_zip_upload,
+    handle_document_upload,
+    handle_text_upload,
+    convert_artifact_to_response
 )
 from loguru import logger
 
@@ -32,10 +34,9 @@ async def add_repository_context(
     session_id: str,
     repo_data: RepositoryContextCreate,
     request: Request,
-    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_active_user)
 ):
-    """Add repository context (compatibility endpoint for old API) - Clones and stores repository code"""
+    """Add repository context (compatibility endpoint) - Clones and stores repository code"""
     logger.info(f"Received repository context request: {repo_data}")
 
     # Extract URL from various possible field names
@@ -44,24 +45,17 @@ async def add_repository_context(
         logger.error("Repository URL is missing from request")
         raise HTTPException(status_code=400, detail="Repository URL is required")
 
-    logger.info(f"Repository URL: {repo_url}")
-
     # Ensure URL has protocol
     if not repo_url.startswith('http://') and not repo_url.startswith('https://'):
         repo_url = f"https://{repo_url}"
         logger.info(f"Added https:// prefix to URL: {repo_url}")
 
-    # Validate repository URL
-    if not validate_repository_url(repo_url):
-        logger.error(f"Invalid repository URL: {repo_url}")
-        raise HTTPException(status_code=400, detail="Invalid repository URL")
-
+    # Verify session exists and belongs to user
     try:
         session_obj_id = ObjectId(session_id)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid session ID")
 
-    # Verify session exists and belongs to user
     session = await request.app.db.chat_sessions.find_one({
         "_id": session_obj_id,
         "user_id": ObjectId(current_user.id),
@@ -71,78 +65,22 @@ async def add_repository_context(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # Get repository info
-    repo_info = get_repository_info(repo_url)
-    repo_name = repo_data.name or repo_info['name'] or "Repository"
-
-    logger.info(f"Cloning repository: {repo_name} from {repo_url}")
-
-    # Clone and extract repository
+    # Handle repository upload using helper function
     try:
-        result = await clone_and_extract_repository(repo_url)
-
-        if result['error']:
-            logger.error(f"Failed to clone repository: {result['error']}")
-            raise HTTPException(status_code=400, detail=f"Failed to clone repository: {result['error']}")
-
-        if not result['files']:
-            raise HTTPException(status_code=400, detail="No code files found in repository")
-
-        logger.info(f"Successfully extracted {result['total_files']} files from repository")
-
-        # Calculate total size
-        total_size = sum(f['size'] for f in result['files'])
-
-        # First, create artifact in database to get ID
-        artifact_dict = {
-            "session_id": session_obj_id,
-            "user_id": ObjectId(current_user.id),
-            "type": "repository",
-            "name": repo_name,
-            "source": repo_url,
-            "files": None,  # Files stored in object storage, not MongoDB
-            "content": None,
-            "metadata": {
-                "repo_info": repo_info,
-                "total_files": result['total_files'],
-                "host": repo_info['host'],
-                "owner": repo_info['owner'],
-                "storage_type": "object"
-            },
-            "size": total_size,
-            "created_at": datetime.now(),
-            "updated_at": datetime.now(),
-            "deleted": False,
-            "deleted_at": None
-        }
-
-        insert_result = await request.app.db.artifacts.insert_one(artifact_dict)
-        artifact_id = str(insert_result.inserted_id)
-
-        # Save files to object storage
-        storage_result = await save_repository_files(artifact_id, result['files'])
-
-        # Update artifact with storage path
-        await request.app.db.artifacts.update_one(
-            {"_id": insert_result.inserted_id},
-            {"$set": {"metadata.storage_path": storage_result["storage_path"]}}
+        artifact = await handle_repository_upload(
+            db=request.app.db,
+            session_id=session_id,
+            user_id=current_user.id,
+            repo_url=repo_url,
+            repo_name=repo_data.name
         )
 
-        # Fetch created artifact
-        created_artifact = await request.app.db.artifacts.find_one({"_id": insert_result.inserted_id})
+        # Convert to response format
+        artifact = convert_artifact_to_response(artifact)
+        return ArtifactResponse(**artifact)
 
-        # Convert ObjectIds to strings and rename _id to id
-        artifact_id = str(created_artifact.pop("_id"))
-        created_artifact["id"] = artifact_id
-        created_artifact["session_id"] = str(created_artifact["session_id"])
-        created_artifact["user_id"] = str(created_artifact["user_id"])
-
-        logger.info(f"Repository artifact created successfully: {artifact_id}")
-
-        return ArtifactResponse(**created_artifact)
-
-    except HTTPException:
-        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Error processing repository: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to process repository: {str(e)}")
@@ -214,13 +152,13 @@ async def upload_artifact(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Upload a file artifact (zip, pdf, doc, etc.)"""
+    """Upload a file artifact (zip, pdf, doc, text)"""
+    # Verify session exists and belongs to user
     try:
         session_obj_id = ObjectId(session_id)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid session ID")
 
-    # Verify session exists and belongs to user
     session = await request.app.db.chat_sessions.find_one({
         "_id": session_obj_id,
         "user_id": ObjectId(current_user.id),
@@ -232,141 +170,64 @@ async def upload_artifact(
 
     # Determine artifact type from file extension
     file_ext = Path(file.filename).suffix.lower()
-
     artifact_type = "file"
+
     if file_ext == ".zip":
         artifact_type = "zip"
-    elif file_ext in [".pdf"]:
+    elif file_ext == ".pdf":
         artifact_type = "pdf"
     elif file_ext in [".doc", ".docx"]:
         artifact_type = "doc"
     elif file_ext in [".txt", ".md"]:
         artifact_type = "text"
+    else:
+        raise HTTPException(status_code=400, detail=f"Unsupported file type: {file_ext}")
 
     # Read file contents
     contents = await file.read()
-    file_size = len(contents)
 
-    # For PDF and binary files, save to object storage
-    if artifact_type in ["pdf", "doc"]:
-        # Create artifact document first
-        artifact_dict = {
-            "session_id": session_obj_id,
-            "user_id": ObjectId(current_user.id),
-            "type": artifact_type,
-            "name": file.filename,
-            "source": file.filename,
-            "files": None,
-            "content": None,
-            "metadata": {
-                "filename": file.filename,
-                "content_type": file.content_type,
-                "storage_type": "object"
-            },
-            "size": file_size,
-            "created_at": datetime.now(),
-            "updated_at": datetime.now(),
-            "deleted": False,
-            "deleted_at": None
-        }
+    # Handle different artifact types using helper functions
+    try:
+        if artifact_type == "zip":
+            artifact = await handle_zip_upload(
+                db=request.app.db,
+                session_id=session_id,
+                user_id=current_user.id,
+                filename=file.filename,
+                content_type=file.content_type,
+                contents=contents
+            )
+        elif artifact_type in ["pdf", "doc"]:
+            artifact = await handle_document_upload(
+                db=request.app.db,
+                session_id=session_id,
+                user_id=current_user.id,
+                filename=file.filename,
+                content_type=file.content_type,
+                contents=contents,
+                artifact_type=artifact_type
+            )
+        elif artifact_type == "text":
+            artifact = await handle_text_upload(
+                db=request.app.db,
+                session_id=session_id,
+                user_id=current_user.id,
+                filename=file.filename,
+                content_type=file.content_type,
+                contents=contents
+            )
+        else:
+            raise HTTPException(status_code=400, detail=f"Unsupported artifact type: {artifact_type}")
 
-        insert_result = await request.app.db.artifacts.insert_one(artifact_dict)
-        artifact_id = str(insert_result.inserted_id)
+        # Convert to response format
+        artifact = convert_artifact_to_response(artifact)
+        return ArtifactResponse(**artifact)
 
-        # Save file to object storage
-        storage_result = await save_uploaded_file(artifact_id, file.filename, contents)
-
-        # Update artifact with storage path
-        await request.app.db.artifacts.update_one(
-            {"_id": insert_result.inserted_id},
-            {"$set": {"metadata.storage_path": storage_result["storage_path"]}}
-        )
-
-        # Fetch created artifact
-        created_artifact = await request.app.db.artifacts.find_one({"_id": insert_result.inserted_id})
-
-        # Convert ObjectIds to strings and rename _id to id
-        created_artifact["id"] = str(created_artifact.pop("_id"))
-        created_artifact["session_id"] = str(created_artifact["session_id"])
-        created_artifact["user_id"] = str(created_artifact["user_id"])
-
-        return ArtifactResponse(**created_artifact)
-
-    files_data = []
-    content = None
-
-    # Process based on type for ZIP and text files
-    if artifact_type == "zip":
-        # Extract code files from zip
-        try:
-            with zipfile.ZipFile(io.BytesIO(contents)) as zip_ref:
-                for file_info in zip_ref.filelist:
-                    if file_info.is_dir():
-                        continue
-
-                    # Skip files larger than 1MB
-                    if file_info.file_size > 1024 * 1024:
-                        continue
-
-                    # Get file extension
-                    ext = Path(file_info.filename).suffix.lower()
-
-                    # Only process code files
-                    code_extensions = {'.py', '.js', '.ts', '.tsx', '.jsx', '.java', '.cpp', '.c', '.h',
-                                     '.cs', '.go', '.rs', '.rb', '.php', '.swift', '.kt', '.scala',
-                                     '.sql', '.html', '.css', '.json', '.xml', '.yaml', '.yml',
-                                     '.md', '.txt', '.sh', '.bash'}
-
-                    if ext in code_extensions:
-                        try:
-                            file_content = zip_ref.read(file_info.filename).decode('utf-8', errors='ignore')
-                            files_data.append({
-                                "path": file_info.filename,
-                                "content": file_content,
-                                "size": file_info.file_size
-                            })
-                        except Exception as e:
-                            logger.warning(f"Failed to read file {file_info.filename}: {e}")
-                            continue
-
-        except zipfile.BadZipFile:
-            raise HTTPException(status_code=400, detail="Invalid zip file")
-
-    elif artifact_type == "text":
-        # Extract text content
-        content = contents.decode('utf-8', errors='ignore')
-
-    # Create artifact document
-    artifact_dict = {
-        "session_id": session_obj_id,
-        "user_id": ObjectId(current_user.id),
-        "type": artifact_type,
-        "name": file.filename,
-        "source": file.filename,
-        "files": files_data if files_data else None,
-        "content": content,
-        "metadata": {
-            "filename": file.filename,
-            "content_type": file.content_type
-        },
-        "size": file_size,
-        "created_at": datetime.now(),
-        "updated_at": datetime.now(),
-        "deleted": False,
-        "deleted_at": None
-    }
-
-    result = await request.app.db.artifacts.insert_one(artifact_dict)
-
-    # Fetch created artifact
-    created_artifact = await request.app.db.artifacts.find_one({"_id": result.inserted_id})
-
-    # Convert ObjectIds to strings and rename _id to id
-    created_artifact["id"] = str(created_artifact.pop("_id"))
-    created_artifact["session_id"] = str(created_artifact["session_id"])
-    created_artifact["user_id"] = str(created_artifact["user_id"])
-
-    return ArtifactResponse(**created_artifact)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error uploading artifact: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to upload artifact: {str(e)}")
 
 
 @router.get("/sessions/{session_id}/artifacts", response_model=List[ArtifactResponse])
@@ -397,13 +258,8 @@ async def get_artifacts(
         "deleted": False
     }).sort("created_at", -1).to_list(length=100)
 
-    # Convert ObjectIds to strings and rename _id to id
-    result = []
-    for artifact in artifacts:
-        artifact["id"] = str(artifact.pop("_id"))  # Rename _id to id
-        artifact["session_id"] = str(artifact["session_id"])
-        artifact["user_id"] = str(artifact["user_id"])
-        result.append(artifact)
+    # Convert ObjectIds to strings for all artifacts
+    result = [convert_artifact_to_response(artifact.copy()) for artifact in artifacts]
 
     return [ArtifactResponse(**artifact) for artifact in result]
 
@@ -442,11 +298,8 @@ async def get_artifact(
     if not artifact:
         raise HTTPException(status_code=404, detail="Artifact not found")
 
-    # Convert ObjectIds to strings and rename _id to id
-    artifact["id"] = str(artifact.pop("_id"))
-    artifact["session_id"] = str(artifact["session_id"])
-    artifact["user_id"] = str(artifact["user_id"])
-
+    # Convert to response format
+    artifact = convert_artifact_to_response(artifact)
     return ArtifactResponse(**artifact)
 
 
@@ -487,11 +340,8 @@ async def update_artifact(
     # Fetch updated artifact
     artifact = await request.app.db.artifacts.find_one({"_id": artifact_obj_id})
 
-    # Convert ObjectIds to strings and rename _id to id
-    artifact["id"] = str(artifact.pop("_id"))
-    artifact["session_id"] = str(artifact["session_id"])
-    artifact["user_id"] = str(artifact["user_id"])
-
+    # Convert to response format
+    artifact = convert_artifact_to_response(artifact)
     return ArtifactResponse(**artifact)
 
 
@@ -591,8 +441,8 @@ async def get_artifact_files(
     artifact_type = artifact.get('type')
     storage_type = artifact.get('metadata', {}).get('storage_type')
 
-    # For object storage, get files from filesystem
-    if storage_type == "object" and artifact_type == "repository":
+    # For object storage, get files from filesystem (works for both repository and zip)
+    if storage_type == "object" and artifact_type in ["repository", "zip"]:
         try:
             result = await get_repository_files(artifact_id, limit, offset)
             return {
@@ -605,7 +455,7 @@ async def get_artifact_files(
                 "files": result['files']
             }
         except FileNotFoundError:
-            raise HTTPException(status_code=404, detail="Repository files not found")
+            raise HTTPException(status_code=404, detail="Artifact files not found")
 
     # Legacy: files stored in MongoDB
     files = artifact.get('files', [])
@@ -654,8 +504,8 @@ async def get_artifact_file_content(
     artifact_type = artifact.get('type')
     storage_type = artifact.get('metadata', {}).get('storage_type')
 
-    # For object storage
-    if storage_type == "object" and artifact_type == "repository":
+    # For object storage (works for both repository and zip)
+    if storage_type == "object" and artifact_type in ["repository", "zip"]:
         try:
             result = await get_repository_file_content(artifact_id, file_path)
             return {
